@@ -1232,8 +1232,9 @@ pub fn open_join(app: &mut FigApp, link: &str) {
     app.ui.live.focus_join = true;
 }
 
-/// An invite link the app was opened with (`figcraft figcraft://join?…`): the Join dialog opens
-/// with the link filled in, so joining is the person's own choice.
+/// An invite link the app was opened with, on its command line (`figcraft figcraft://join?…`) or
+/// through the macOS URL event, running or just launched: the Join dialog opens with the link
+/// filled in, so joining is the person's own choice.
 ///
 /// The system hands the app any `figcraft://` link that is followed, which may be a page, a
 /// message or a document rather than something the person meant to act on, so the link is shown
