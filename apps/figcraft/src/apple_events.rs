@@ -1,4 +1,4 @@
-//! macOS open-documents and quit Apple events (#289).
+//! macOS open-documents, open-link and quit Apple events (#289).
 //!
 //! Finder double-clicks, Open With, drops on the Dock icon and `open -a FigCraft file.figcraft`
 //! don't pass paths on the command line: LaunchServices sends the running (or just-launched) app a
@@ -8,6 +8,9 @@
 //! workspace forbids. The `fmv-macos-events` crate (also used by GridCraft, EffectCraft and
 //! PhotoCraft) wraps exactly that, an `NSAppleEventManager` handler registered before Finder's
 //! launch event that leaves winit's delegate alone, behind a safe main-thread API.
+//!
+//! A followed `figcraft://` link is a `kAEGetURL` ('GURL') event, to a running app or one it just
+//! launched; it never reaches the command line.
 
 use std::path::PathBuf;
 
@@ -37,11 +40,12 @@ impl AppleEvents {
     }
 }
 
-/// Open the documents and act on the quit requests that arrived since the last frame.
+/// Open the documents and links and act on the quit requests that arrived since the last frame.
 pub fn poll(inbox: &Inbox, fig: &mut FigApp, ctx: &egui::Context) {
     for e in inbox.drain() {
         match e {
             Event::Open(paths) => open_documents(fig, paths),
+            Event::Url(link) => figcraft_ui_egui::live::open_invite(fig, &link),
             Event::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
         }
     }

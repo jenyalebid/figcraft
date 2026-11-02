@@ -36,9 +36,11 @@ env_logger = { version = "0.11", default-features = false, features = ["auto-col
 windows = { version = "0.62", default-features = false, features = ["UI_ViewManagement", "System_UserProfile", "Foundation_Collections", "Gaming_Input"] }
 
 # Finder double-clicks, Open With, Dock drops and `open -a FigCraft file.figcraft` arrive as a
-# kAEOpenDocuments Apple event, which winit 0.30 doesn't handle. This crate (also used by GridCraft,
+# kAEOpenDocuments Apple event and a followed `figcraft://` link as kAEGetURL, neither of which
+# winit 0.30 handles. This crate (also used by GridCraft,
 # EffectCraft and PhotoCraft) registers the handler behind a safe API (Objective-C interop needs
-# unsafe, which the workspace forbids). Pinned exactly: review the diff before bumping.
+# unsafe, which the workspace forbids). Pinned exactly: review the diff before bumping. Patched from
+# `vendor/` in the workspace manifest.
 [target.'cfg(target_os = "macos")'.dependencies]
 fmv-macos-events = "=0.1.0"
 

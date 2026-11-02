@@ -804,9 +804,11 @@ installing: [`plugins.md`](plugins.md#plugin-directories)):
 
 *Built* (opening invite links):
 
-- The desktop app takes an invite link on its command line (`figcraft "figcraft://join?…"`): once
-  the window is up it joins (`collab.join`); a link it can't use opens the Join dialog with the
-  link and the reason. Other arguments are files, as paths or `file://` URLs.
+- The desktop app takes an invite link on its command line (`figcraft "figcraft://join?…"`): the
+  Join dialog opens with the link in it, so joining stays the person's own choice. Other arguments
+  are files, as paths or `file://` URLs.
+- **macOS**: a followed link (`open 'figcraft://join?…'`) arrives as the `kAEGetURL` Apple event,
+  to a running app or one it just launched, and opens the same dialog.
 - **Windows**: the app registers itself per user as the opener of `figcraft://` under
   `HKEY_CURRENT_USER\Software\Classes\figcraft` (no administrator rights): the scheme, its icon
   and `"<figcraft.exe>" "%1"`. Preferences ▸ **Open invite links in FigCraft** (and

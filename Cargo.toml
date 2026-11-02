@@ -2,7 +2,8 @@
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
 # The plugin SDK and examples build for wasm32 in a workspace of their own (`cargo xtask plugins`).
-exclude = ["plugins"]
+# `vendor` holds a third-party crate that needs `unsafe`, which this workspace forbids.
+exclude = ["plugins", "vendor"]
 # default-members = ["crates/*", "apps/figcraft", "apps/figcraft-cli", "xtask"]
 
 [workspace.package]
@@ -124,3 +125,7 @@ codegen-units = 1
 debug = false
 strip = true
 panic = "abort"
+
+# 0.1.0 plus the GURL Apple event, which the release doesn't register: see its README.
+[patch.crates-io]
+fmv-macos-events = { path = "vendor/fmv-macos-events" }
