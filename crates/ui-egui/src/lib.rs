@@ -6,9 +6,11 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 /// FigCraft as craft-update knows it, with its 128 px icon and accent colour: the update
-/// prompt shows both, and an AppImage's menu entry gets the icon.
+/// prompt shows both, and an AppImage's menu entry gets the icon. `repo` is this fork: a build of
+/// it is offered the fork's releases, never upstream's, which lack what the fork carries.
 #[cfg(not(target_arch = "wasm32"))]
 pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
+    repo: "jenyalebid/figcraft",
     icon_png: Some(include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.figcraft.png")),
     accent: Some([0x02, 0xda, 0x96]),
     ..craft_update::suite::FIGCRAFT
