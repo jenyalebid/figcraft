@@ -70,10 +70,23 @@ impl Img {
     }
 }
 
+/// What layers, bottom to top, amount to: a stack of one is that one, so what reads it next (a
+/// blur on the layer Figma first blends over an empty flood) sees what it is.
+fn stacked(mut v: Vec<Img>) -> Img {
+    match (v.pop(), v.is_empty()) {
+        (None, _) => Img::Clear,
+        (Some(one), true) => one,
+        (Some(top), false) => {
+            v.push(top);
+            Img::Stack(v)
+        }
+    }
+}
+
 fn stack(bottom: Img, top: Img) -> Img {
     let mut v = bottom.into_layers();
     v.extend(top.into_layers());
-    Img::Stack(v)
+    stacked(v)
 }
 
 /// The effects `filters` amount to on a layer whose user space maps to the page by `world`; `None`
@@ -149,7 +162,7 @@ fn primitive(k: &Kind, get: &dyn Fn(&Input) -> Option<Img>) -> Option<Img> {
             for i in m.inputs() {
                 v.extend(get(i)?.into_layers());
             }
-            Img::Stack(v)
+            stacked(v)
         }
         Kind::Blend(b) => {
             let (top, bottom) = (get(b.input1())?, get(b.input2())?);

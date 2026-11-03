@@ -215,6 +215,43 @@ fn blurred_layers_shadows_come_back_as_they_were() {
     }
 }
 
+/// Figma's layer blur starts by blending the layer over an empty flood: that is still just the
+/// layer, so the blur on it is a layer blur, not a filter to drop.
+#[test]
+fn figma_layer_blur_over_its_empty_flood_is_one_layer_blur() {
+    const FIGMA: &str = r##"<feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="40" result="effect1_foregroundBlur"/>"##;
+    let (fx, notes) = effects(FIGMA, "");
+    assert_eq!(fx, vec![EffectKind::LayerBlur(Blur { radius: 80.0, ..Blur::default() })], "{notes:?}");
+    assert!(notes.is_empty(), "{notes:?}");
+    let (fx, notes) = effects(FIGMA, "scale(2)");
+    assert_eq!(fx, vec![EffectKind::LayerBlur(Blur { radius: 160.0, ..Blur::default() })], "{notes:?}");
+    assert!(notes.is_empty(), "{notes:?}");
+    // The same stack of one, written as a merge.
+    let (fx, notes) = effects(r##"<feMerge result="m"><feMergeNode in="SourceGraphic"/></feMerge><feGaussianBlur in="m" stdDeviation="3"/>"##, "");
+    assert_eq!(fx, vec![EffectKind::LayerBlur(Blur { radius: 6.0, ..Blur::default() })], "{notes:?}");
+    assert!(notes.is_empty(), "{notes:?}");
+}
+
+/// The other chains that open on that empty flood: a drop shadow and an inner shadow stay what
+/// they were, and a background blur, which isn't the layer's own, is still reported.
+#[test]
+fn figma_chains_over_an_empty_flood_stay_what_they_are() {
+    const SHADOW: &str = r##"<feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="2"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>"##;
+    let (fx, notes) = effects(SHADOW, "");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert!(matches!(fx.as_slice(), [EffectKind::DropShadow(s)] if s.offset == (0.0, 4.0) && s.radius == 4.0 && !s.show_behind), "{fx:?}");
+
+    const INNER: &str = r##"<feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="2"/><feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/><feBlend mode="normal" in2="shape" result="effect1_innerShadow"/>"##;
+    let (fx, notes) = effects(INNER, "");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert!(matches!(fx.as_slice(), [EffectKind::InnerShadow(s)] if s.offset == (0.0, 4.0) && s.radius == 4.0), "{fx:?}");
+
+    const BACKGROUND: &str = r##"<feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="4"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_backgroundBlur" result="shape"/>"##;
+    let (fx, notes) = effects(BACKGROUND, "");
+    assert!(fx.is_empty(), "{fx:?}");
+    assert!(!notes.is_empty(), "reported");
+}
+
 /// Copies of the blurred layer in its own colours aren't shadows: still reported, not imported
 /// as black ones.
 #[test]
