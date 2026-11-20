@@ -87,6 +87,12 @@ fn text_of(s: &Session, id: NodeId) -> Result<TextData> {
     }
 }
 
+/// Whether the text being edited is a code block's.
+fn in_code(s: &Session) -> bool {
+    let Some(te) = s.ds().ok().and_then(|d| d.text_edit.as_ref()) else { return false };
+    s.doc().is_ok_and(|d| crate::board::is_code_text(d, te.id))
+}
+
 /// Start editing text node `id` with the caret at `caret` (None = select all).
 pub fn begin(s: &mut Session, id: NodeId, caret: Option<usize>, created: bool) -> Result<()> {
     let t = text_of(s, id)?;
@@ -282,33 +288,60 @@ fn insert_model(s: &mut Session, text: &str, ime_commit: bool) -> Result<ImeInse
     // A commit the editor had to transform is an application edit, not a plain insertion.
     let mut outcome = if normalized == text { ImeInsertion::Plain } else { ImeInsertion::Transformed };
     let text = normalized;
+    // Code is typed as it is: no list from "- " (and no smart punctuation or link to come).
+    let code = in_code(s);
     edit(s, |t, te| {
         let (a, b) = range(te);
-        // "- ", "* ", "1. " or "1) " typed at the start of a plain paragraph starts a list (the
-        // creation characters of Create bulleted and numbered lists).
-        if text == " " && a == b && t.para_list(t.para_of(a)).list == ListStyle::None {
+        // "- ", "* ", "<number>. " or "1) " typed at the start of a plain paragraph starts a list
+        // (the creation characters of Create bulleted and numbered lists). As measured in Figma
+        // (2026-11-11), a typed "5. " starts the numbered list at 5 (there is no start-number
+        // field). "0. " and a bracket after a number other than 1 are not measured: plain text.
+        if !code && text == " " && a == b && t.para_list(t.para_of(a)).list == ListStyle::None {
             let chars: Vec<char> = t.characters.chars().collect();
             let start = line_start(&chars, a);
             let typed: String = chars.get(start..a).unwrap_or(&[]).iter().collect();
+            let mut first = 1_u32;
             let list = match typed.as_str() {
                 "-" | "*" => ListStyle::Bulleted,
-                "1." | "1)" => ListStyle::Numbered,
-                _ => ListStyle::None,
+                "1)" => ListStyle::Numbered,
+                _ => match typed.strip_suffix('.').filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())) {
+                    Some(d) => match d.parse::<u32>() {
+                        Ok(n) if (1..=MAX_TYPED_LIST_START).contains(&n) => {
+                            first = n;
+                            ListStyle::Numbered
+                        }
+                        _ => ListStyle::None,
+                    },
+                    None => ListStyle::None,
+                },
             };
             if list != ListStyle::None {
                 t.replace_range(start, a, "");
-                t.set_para_lists(start, start, |pl| pl.list = list);
+                t.set_para_lists(start, start, |pl| {
+                    pl.list = list;
+                    pl.start_offset = first - 1;
+                });
                 (te.caret, te.anchor) = (start, start);
                 outcome = ImeInsertion::Transformed;
                 return;
             }
         }
         t.replace_range(a, b, &text);
+        // As measured in Figma (2026-11-11): an item made by Enter has no start of its own, so
+        // unlisting the item before it makes it restart at 1 rather than at the copied start.
+        // Every paragraph after the first that the insertion made loses the start it was copied.
+        if text.contains('\n') {
+            let end = a + text.chars().count();
+            t.clear_list_starts(t.para_of(a) + 1, t.para_of(end));
+        }
         te.caret = a + text.chars().count();
         te.anchor = te.caret;
     })?;
     Ok(outcome)
 }
+
+/// The largest number a typed `N. ` can start a numbered list at.
+const MAX_TYPED_LIST_START: u32 = 9999;
 
 /// What a list key does to the selected items.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -437,6 +470,16 @@ pub fn key(s: &mut Session, key: &str, shift: bool, word: bool, line: bool) -> R
     let n = chars.len();
     if matches!(key, "Tab" | "Backspace" | "Delete" | "Enter") && !word && !line && list_key(s, key, shift)? {
         return Ok(());
+    }
+    // In a code block Tab types two spaces and Enter keeps the line's indent.
+    if matches!(key, "Tab" | "Enter") && !word && !line && in_code(s) {
+        if key == "Tab" {
+            return if shift { Ok(()) } else { insert(s, figcraft_doc::CODE_TAB) };
+        }
+        let (a, _) = range(&te);
+        let start = line_start(&chars, a);
+        let indent: String = chars.get(start..a).unwrap_or(&[]).iter().take(256).take_while(|c| matches!(c, ' ' | '\t')).collect();
+        return insert(s, &format!("\n{indent}"));
     }
     match key {
         "Escape" => return end(s),
